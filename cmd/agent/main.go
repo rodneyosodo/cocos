@@ -10,13 +10,13 @@ import (
 	"log"
 	"log/slog"
 
+	"github.com/absmach/magistrala/pkg/prometheus"
 	"github.com/mdlayher/vsock"
 	"github.com/ultravioletrs/cocos/agent"
 	"github.com/ultravioletrs/cocos/agent/api"
 	agentgrpc "github.com/ultravioletrs/cocos/agent/api/grpc"
 	"github.com/ultravioletrs/cocos/agent/auth"
 	"github.com/ultravioletrs/cocos/agent/events"
-	"github.com/ultravioletrs/cocos/internal"
 	agentlogger "github.com/ultravioletrs/cocos/internal/logger"
 	"github.com/ultravioletrs/cocos/internal/server"
 	grpcserver "github.com/ultravioletrs/cocos/internal/server/grpc"
@@ -45,6 +45,7 @@ func main() {
 		log.Fatal(err)
 	}
 	defer conn.Close()
+
 	var level slog.Level
 	if err := level.UnmarshalText([]byte(cfg.AgentConfig.LogLevel)); err != nil {
 		log.Println(err)
@@ -59,6 +60,7 @@ func main() {
 		return
 	}
 	defer eventSvc.Close()
+
 	svc := newService(ctx, logger, eventSvc, cfg)
 
 	grpcServerConfig := server.Config{
@@ -101,7 +103,7 @@ func newService(ctx context.Context, logger *slog.Logger, eventSvc events.Servic
 	svc := agent.New(ctx, logger, eventSvc, cmp)
 
 	svc = api.LoggingMiddleware(svc, logger)
-	counter, latency := internal.MakeMetrics(svcName, "api")
+	counter, latency := prometheus.MakeMetrics(svcName, "api")
 	svc = api.MetricsMiddleware(svc, counter, latency)
 
 	return svc
@@ -113,6 +115,7 @@ func readConfig() (agent.Computation, error) {
 		return agent.Computation{}, err
 	}
 	defer l.Close()
+
 	conn, err := l.Accept()
 	if err != nil {
 		return agent.Computation{}, err
