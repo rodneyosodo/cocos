@@ -1,8 +1,9 @@
 // Copyright (c) Ultraviolet
 // SPDX-License-Identifier: Apache-2.0
-package binary
+package wasm
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"log/slog"
@@ -11,14 +12,13 @@ import (
 
 	"github.com/ultravioletrs/cocos/agent/algorithm"
 	"github.com/ultravioletrs/cocos/agent/events"
-	"github.com/ultravioletrs/cocos/pkg/socket"
 )
 
-const socketPath = "unix_socket"
+const wasmtimeBinary = "wasmtime"
 
-var _ algorithm.Algorithm = (*binary)(nil)
+var _ algorithm.Algorithm = (*wasm)(nil)
 
-type binary struct {
+type wasm struct {
 	algoFile string
 	datasets []string
 	logger   *slog.Logger
@@ -27,7 +27,7 @@ type binary struct {
 }
 
 func NewAlgorithm(logger *slog.Logger, eventsSvc events.Service, algoFile string, datasets ...string) algorithm.Algorithm {
-	return &binary{
+	return &wasm{
 		algoFile: algoFile,
 		datasets: datasets,
 		logger:   logger,
@@ -36,7 +36,7 @@ func NewAlgorithm(logger *slog.Logger, eventsSvc events.Service, algoFile string
 	}
 }
 
-func (b *binary) Run() ([]byte, error) {
+func (b *wasm) Run() ([]byte, error) {
 	defer func() {
 		os.Remove(b.algoFile)
 		for _, file := range b.datasets {
@@ -44,24 +44,13 @@ func (b *binary) Run() ([]byte, error) {
 		}
 	}()
 
-	listener, err := socket.StartUnixSocketServer(socketPath)
-	if err != nil {
-		return nil, fmt.Errorf("error creating stdout pipe: %v", err)
-	}
-	defer listener.Close()
+	args := []string{b.algoFile}
+	args = append(args, b.datasets...)
+	cmd := exec.Command(wasmtimeBinary, args...)
 
-	// Create channels for received data and errors
-	dataChannel := make(chan []byte)
-	errorChannel := make(chan error)
-
-	var result []byte
-
-	go socket.AcceptConnection(listener, dataChannel, errorChannel)
-
-	args := append([]string{socketPath}, b.datasets...)
-	cmd := exec.Command(b.algoFile, args...)
 	cmd.Stderr = b.stderr
-	cmd.Stdout = b.stdout
+	var outBuf bytes.Buffer
+	cmd.Stdout = io.MultiWriter(&outBuf, b.stdout)
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("error starting algorithm: %v", err)
@@ -71,10 +60,5 @@ func (b *binary) Run() ([]byte, error) {
 		return nil, fmt.Errorf("algorithm execution error: %v", err)
 	}
 
-	select {
-	case result = <-dataChannel:
-		return result, nil
-	case err = <-errorChannel:
-		return nil, fmt.Errorf("error receiving data: %v", err)
-	}
+	return outBuf.Bytes(), nil
 }

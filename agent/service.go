@@ -13,7 +13,9 @@ import (
 	"slices"
 
 	"github.com/google/go-sev-guest/client"
+	"github.com/ultravioletrs/cocos/agent/algorithm"
 	"github.com/ultravioletrs/cocos/agent/algorithm/binary"
+	"github.com/ultravioletrs/cocos/agent/algorithm/wasm"
 	"github.com/ultravioletrs/cocos/agent/events"
 	"golang.org/x/crypto/sha3"
 )
@@ -211,7 +213,20 @@ func (as *agentService) runComputation() {
 	as.sm.logger.Debug("computation run started")
 	defer as.sm.SendEvent(runComplete)
 	as.publishEvent("in-progress", json.RawMessage{})()
-	algorithm := binary.New(as.sm.logger, as.eventSvc, as.algorithm, as.datasets...)
+
+	var algorithm algorithm.Algorithm
+	switch as.computation.Algorithm.Type {
+	case BinaryAlgorithm:
+		algorithm = binary.NewAlgorithm(as.sm.logger, as.eventSvc, as.algorithm, as.datasets...)
+	case WebAssemblyAlgorithm:
+		algorithm = wasm.NewAlgorithm(as.sm.logger, as.eventSvc, as.algorithm, as.datasets...)
+	default:
+		as.runError = fmt.Errorf("unsupported algorithm type: %s", as.computation.Algorithm.Type)
+		as.sm.logger.Warn(fmt.Sprintf("computation did not start: %s", as.runError.Error()))
+		as.publishEvent("failed", json.RawMessage{})()
+		return
+	}
+
 	result, err := algorithm.Run()
 	if err != nil {
 		as.runError = err

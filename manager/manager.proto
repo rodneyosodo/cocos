@@ -78,8 +78,9 @@ message Dataset {
 }
 
 message Algorithm {
-  bytes hash = 1; // should be sha3.Sum256, 32 byte length.
-  bytes userKey = 2;
+  string type = 1;
+  bytes hash = 2; // should be sha3.Sum256, 32 byte length.
+  bytes userKey = 3;
 }
 
 message AgentConfig {
@@ -92,4 +93,3 @@ message AgentConfig {
   string log_level = 7;
   bool   attested_tls = 8;
 }
-

@@ -51,7 +51,13 @@ type Dataset struct {
 
 type Datasets []Dataset
 
+const (
+	BinaryAlgorithm      string = "binary"
+	WebAssemblyAlgorithm string = "web_assembly"
+)
+
 type Algorithm struct {
+	Type      string   `json:"algo_type"`
 	Algorithm []byte   `json:"-"`
 	Hash      [32]byte `json:"hash,omitempty"`
 	UserKey   []byte   `json:"user_key,omitempty"`
